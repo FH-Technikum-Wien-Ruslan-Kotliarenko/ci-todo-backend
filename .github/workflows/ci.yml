@@ -16,75 +16,86 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-    #   - name: Set up Node.js
-    #     uses: actions/setup-node@v3
-    #     with:
-    #       node-version: '18'
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
 
-    #   - name: Install Dependencies
-    #     run: npm install
+      - name: Install Dependencies
+        run: npm install
 
-    #   - name: Lint Code
-    #     run: npm run lint
+      - name: Lint Code
+        run: npm run lint
 
-    #   - name: Run Tests
-    #     run: npm run test
+      - name: Run Tests
+        run: npm run test
 
-    #   - name: SonarQube Scan
-    #     uses: sonarsource/sonarqube-scan-action@master
-    #     env:
-    #       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-    #       SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      - name: SonarQube Scan
+        uses: sonarsource/sonarqube-scan-action@master
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
-    #   - name: Snyk Monitor (Upload Dependencies)
-    #     uses: snyk/actions/node@master
-    #     env:
-    #         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-    #     with:
-    #         command: monitor
+      - name: Snyk Monitor (Upload Dependencies)
+        uses: snyk/actions/node@master
+        env:
+            SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+            command: monitor
   
-    #   - name: Snyk Test (Check for Vulnerabilities)
-    #     uses: snyk/actions/node@master
-    #     env:
-    #         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-    #     with:
-    #         args: --severity-threshold=high
+      - name: Snyk Test (Check for Vulnerabilities)
+        uses: snyk/actions/node@master
+        continue-on-error: true # ideally should be true, but for demo purposes we set it to false
+        env:
+            SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+            args: --severity-threshold=high
 
 
-    #     # Step 2: Login to Docker Hub
-    #   - name: Login to Docker Hub
-    #     uses: docker/login-action@v2
-    #     with:
-    #         username: ${{ secrets.DOCKERHUB_USERNAME }}
-    #         password: ${{ secrets.DOCKERHUB_PASSWORD }}
+        # Step 2: Login to Docker Hub
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+            username: ${{ secrets.DOCKERHUB_USERNAME }}
+            password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
-    #     # Step 3: Build the Docker image
-    #   - name: Build Docker Image
-    #     run: docker build --platform linux/amd64 -t ruslankotliar/ci-todo-backend:${{ github.sha }} .
+        # Step 3: Build the Docker image
+      - name: Build Docker Image
+        run: docker build --platform linux/amd64 -t ruslankotliar/ci-todo-backend:${{ github.sha }} .
 
-    #     # Step 4: Push the Docker image to Docker Hub
-    #   - name: Push Docker Image
-    #     run: docker push ruslankotliar/ci-todo-backend:${{ github.sha }}
+        # Step 4: Push the Docker image to Docker Hub
+      - name: Push Docker Image
+        run: docker push ruslankotliar/ci-todo-backend:${{ github.sha }}
 
-    #   - name: Deploy to EC2
-    #     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/deploy/production'
-    #     uses: appleboy/ssh-action@v0.1.4
-    #     with:
-    #       host: your-ec2-public-ip
-    #       username: ubuntu
-    #       key: ${{ secrets.EC2_SSH_KEY }}
-    #       script: |
-    #         cd app
-    #         docker-compose pull backend
-    #         docker-compose up -d backend
+      - name: Deploy to AWS EC2
+        uses: appleboy/ssh-action@v0.1.6
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_PRIVATE_KEY }}
+          port: 22
+          script: |
+            cd app
+            sed -i '/^BACKEND_TAG=/d' .env  # Remove existing BACKEND_TAG if present
+            echo "BACKEND_TAG=${{ github.sha }}" >> .env  # Add or update BACKEND_TAG
+            docker compose pull backend
+            docker compose up -d backend
 
-    #   - name: Notify on Failure
-    #     if: failure()
-    #     uses: slackapi/slack-github-action@v1.23.0
-    #     with:
-    #       payload: |
-    #         {
-    #           "text": "Frontend CI/CD Pipeline failed for commit `${{ github.sha }}` in repository `${{ github.repository }}`"
-    #         }
-    #     env:
-    #       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      # Uncomment this step to test failure notification
+      # - name: Test Failure
+      #   run: exit 1 # Force a failure for testing purposes
+
+  notify:
+    if: failure()
+    needs: build-and-deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Post text to a Slack channel
+        uses: slackapi/slack-github-action@v2.0.0
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          payload: |
+            "channel": "${{ secrets.SLACK_BACKEND_CHANNEL_ID }}",
+            "text": "🚨 Backend CI pipeline failed for commit ${{ github.sha }}. Check the logs for details."
