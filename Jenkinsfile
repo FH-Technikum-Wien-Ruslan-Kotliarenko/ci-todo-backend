@@ -90,7 +90,7 @@ pipeline {
         //         snykSecurity(
         //             snykInstallation: 'snyk-tool',
         //             snykTokenId: 'snyk-token-id',
-        //             failOnIssues: false
+        //             failOnIssues: false // ideally should be true, but for demo purposes we set it to false
         //         )
         //     }
         // }
