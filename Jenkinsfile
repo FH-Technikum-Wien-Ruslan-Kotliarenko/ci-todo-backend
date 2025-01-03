@@ -138,10 +138,22 @@ pipeline {
         //                         sshTransfer(
         //                             execCommand: """
         //                                 cd app
-        //                                 sed -i '/^BACKEND_TAG=/d' .env
-        //                                 echo "BACKEND_TAG=\${GIT_COMMIT}" >> .env
-        //                                 docker compose pull backend
-        //                                 docker compose up -d backend
+
+        //                                 # 1. Update .env to set BACKEND_GREEN_TAG
+        //                                 sed -i '/^BACKEND_GREEN_TAG=/d' .env
+        //                                 echo "BACKEND_GREEN_TAG=${GIT_COMMIT}" >> .env
+
+        //                                 # 2. Deploy 'backend_green'
+        //                                 docker compose pull backend_green
+        //                                 docker compose up -d backend_green
+
+        //                                 # 3. Optional: check logs or do health check
+
+        //                                 # 4. Flip Nginx from backend_blue to backend_green
+        //                                 sed -i 's/set \$active_backend backend_blue;/set \$active_backend backend_green;/' nginx.conf
+
+        //                                 # 5. Reload Nginx
+        //                                 docker compose exec nginx nginx -s reload
         //                             """
         //                         )
         //                     ],
