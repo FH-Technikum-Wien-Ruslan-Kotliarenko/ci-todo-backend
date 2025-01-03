@@ -18,16 +18,14 @@ pipeline {
             steps {
                 // This can be set differently per branch in a Multibranch Pipeline job,
                 // or you can do a single pipeline with a parameter for the branch
-                echo 'Pulling...' + env.BRANCH_NAME
                 checkout scm
             }
         }
 
         stage('Install Dependencies') {
             when {
-                anyOf {
-                    branch 'main'
-                    branch 'deploy/production'
+                expression {
+                    env.GIT_BRANCH == 'main' || env.GIT_BRANCH == 'deploy/production'
                 }
             }
             steps {
