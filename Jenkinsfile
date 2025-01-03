@@ -153,7 +153,7 @@ pipeline {
                                         sed -i 's/set \$active_backend backend_blue;/set \$active_backend backend_green;/' nginx.conf
 
                                         # 5. Reload Nginx
-                                        docker compose exec nginx nginx -s reload
+                                        docker compose restart nginx
                                     """
                                 )
                             ],
