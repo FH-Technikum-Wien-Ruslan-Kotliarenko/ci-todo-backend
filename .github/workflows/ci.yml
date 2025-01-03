@@ -20,33 +20,58 @@ jobs:
           node-version: '18'
 
       - name: Install Dependencies
-        if: github.ref_name == 'main'
         run: npm install
+        # Run if pushing to main OR deploy/production
+        if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/deploy/production')
 
       - name: Lint Code
-        if: github.ref_name == 'main'
         run: npm run lint
+        if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/deploy/production')
 
       - name: Run Tests
-        if: github.ref_name == 'main'
         run: npm run test
+        if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/deploy/production')
+
+      - name: SonarQube Scan
+        uses: sonarsource/sonarqube-scan-action@master
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/deploy/production')
+
+      - name: Snyk Monitor
+        uses: snyk/actions/node@master
+        env:
+            SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+            command: monitor
+        if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/deploy/production')
+
+      - name: Snyk Test
+        uses: snyk/actions/node@master
+        env:
+            SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+            args: --severity-threshold=high
+        if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/deploy/production')
 
       - name: Login to Docker Hub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
+        # Run if pushing to main OR deploy/production
+        if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/deploy/production')
 
       - name: Build Docker Image
-        if: github.ref_name == 'main'
-        run: docker build --platform linux/amd64 -t ruslankotliar/ci-todo-backend:${{ github.sha }} .
+        run: docker build --platform linux/amd64 -t your-dockerhub-username/ci-todo-backend:${{ github.sha }} .
+        if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/deploy/production')
 
       - name: Push Docker Image
-        if: github.ref_name == 'main'
-        run: docker push ruslankotliar/ci-todo-backend:${{ github.sha }}
+        run: docker push your-dockerhub-username/ci-todo-backend:${{ github.sha }}
+        if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/deploy/production')
 
       - name: Deploy to AWS EC2
-        if: github.ref_name == 'deploy/production'
         uses: appleboy/ssh-action@v0.1.6
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -55,10 +80,12 @@ jobs:
           port: 22
           script: |
             cd app
-            sed -i '/^BACKEND_TAG=/d' .env  # Remove existing BACKEND_TAG if present
-            echo "BACKEND_TAG=${{ github.sha }}" >> .env  # Add or update BACKEND_TAG
+            sed -i '/^BACKEND_TAG=/d' .env
+            echo "BACKEND_TAG=${{ github.sha }}" >> .env
             docker compose pull backend
             docker compose up -d backend
+        # IMPORTANT: Only run on deploy/production
+        if: startsWith(github.ref, 'refs/heads/deploy/production')
 
       # Uncomment this step to test failure notification
       # - name: Test Failure
@@ -70,11 +97,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Post to Slack
+      - name: Post text to a Slack channel
         uses: slackapi/slack-github-action@v2.0.0
         with:
           method: chat.postMessage
           token: ${{ secrets.SLACK_BOT_TOKEN }}
           payload: |
             "channel": "${{ secrets.SLACK_BACKEND_CHANNEL_ID }}",
-            "text": "🚨 GitHub Actions: Backend CI/CD pipeline failed for branch ${{ github.ref_name }}."
+            "text": "🚨 Backend CI pipeline failed for commit ${{ github.sha }}. Check the logs for details."
