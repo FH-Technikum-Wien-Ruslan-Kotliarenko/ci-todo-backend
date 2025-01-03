@@ -18,13 +18,8 @@ pipeline {
             steps {
                 // This can be set differently per branch in a Multibranch Pipeline job,
                 // or you can do a single pipeline with a parameter for the branch
+                echo 'Pulling...' + env.BRANCH_NAME
                 checkout scm
-            }
-        }
-
-        stage('Print current branch') {
-            steps {
-                sh 'echo "Current branch is \${BRANCH_NAME}"'
             }
         }
 
