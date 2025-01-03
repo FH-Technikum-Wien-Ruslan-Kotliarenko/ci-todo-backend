@@ -6,6 +6,9 @@ pipeline {
         SONAR_HOST_URL = credentials('sonar-host-url')
         DOCKERHUB_USERNAME = credentials('dockerhub-username')
         SLACK_BACKEND_CHANNEL_ID = credentials('slack-backend-channel-id')
+        DOCKER_PLATFORM = "linux/amd64"
+        MAIN_BRANCH = 'main'
+        DEPLOY_PROD_BRANCH = 'deploy/production'
     }
 
     tools {
@@ -16,16 +19,15 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                // This can be set differently per branch in a Multibranch Pipeline job,
-                // or you can do a single pipeline with a parameter for the branch
                 checkout scm
             }
         }
 
         stage('Install Dependencies') {
             when {
-                expression {
-                    env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'deploy/production'
+                anyOf {
+                    branch MAIN_BRANCH
+                    branch DEPLOY_PROD_BRANCH
                 }
             }
             steps {
@@ -36,8 +38,8 @@ pipeline {
         stage('Lint') {
             when {
                 anyOf {
-                    branch 'main'
-                    branch 'deploy/production'
+                    branch MAIN_BRANCH
+                    branch DEPLOY_PROD_BRANCH
                 }
             }
             steps {
@@ -48,8 +50,8 @@ pipeline {
         stage('Test') {
             when {
                 anyOf {
-                    branch 'main'
-                    branch 'deploy/production'
+                    branch MAIN_BRANCH
+                    branch DEPLOY_PROD_BRANCH
                 }
             }
             steps {
@@ -60,8 +62,8 @@ pipeline {
         stage('SonarQube Analysis') {
             when {
                 anyOf {
-                    branch 'main'
-                    branch 'deploy/production'
+                    branch MAIN_BRANCH
+                    branch DEPLOY_PROD_BRANCH
                 }
             }
             steps {
@@ -82,8 +84,8 @@ pipeline {
         stage('Snyk Security Scan') {
             when {
                 anyOf {
-                    branch 'main'
-                    branch 'deploy/production'
+                    branch MAIN_BRANCH
+                    branch DEPLOY_PROD_BRANCH
                 }
             }
             steps {
@@ -98,20 +100,20 @@ pipeline {
         stage('Build Docker Image') {
             when {
                 anyOf {
-                    branch 'main'
-                    branch 'deploy/production'
+                    branch MAIN_BRANCH
+                    branch DEPLOY_PROD_BRANCH
                 }
             }
             steps {
-                sh "docker build --platform linux/amd64 -t \${DOCKERHUB_USERNAME}/ci-todo-backend:\${GIT_COMMIT} ."
+                sh "docker build --platform \${DOCKER_PLATFORM} -t \${DOCKERHUB_USERNAME}/ci-todo-backend:\${GIT_COMMIT} ."
             }
         }
 
         stage('Push Docker Image') {
             when {
                 anyOf {
-                    branch 'main'
-                    branch 'deploy/production'
+                    branch MAIN_BRANCH
+                    branch DEPLOY_PROD_BRANCH
                 }
             }
             steps {
@@ -123,7 +125,7 @@ pipeline {
 
         stage('Deploy to AWS') {
             when {
-                branch 'deploy/production'
+                branch DEPLOY_PROD_BRANCH
             }
             steps {
                 sshPublisher(
