@@ -5,6 +5,7 @@ pipeline {
         SONAR_TOKEN = credentials('sonar-token-id')
         SONAR_HOST_URL = credentials('sonar-host-url')
         DOCKERHUB_USERNAME = credentials('dockerhub-username')
+        SLACK_BACKEND_CHANNEL_ID = credentials('slack-backend-channel-id')
     }
 
     tools {
@@ -21,133 +22,133 @@ pipeline {
             }
         }
 
-        // stage('Install Dependencies') {
-        //     when {
-        //         anyOf {
-        //             branch 'main'
-        //             branch 'deploy/production'
-        //         }
-        //     }
-        //     steps {
-        //         sh 'npm install'
-        //     }
-        // }
+        stage('Install Dependencies') {
+            when {
+                anyOf {
+                    branch 'main'
+                    branch 'deploy/production'
+                }
+            }
+            steps {
+                sh 'npm install'
+            }
+        }
 
-        // stage('Lint') {
-        //     when {
-        //         anyOf {
-        //             branch 'main'
-        //             branch 'deploy/production'
-        //         }
-        //     }
-        //     steps {
-        //         sh 'npm run lint'
-        //     }
-        // }
+        stage('Lint') {
+            when {
+                anyOf {
+                    branch 'main'
+                    branch 'deploy/production'
+                }
+            }
+            steps {
+                sh 'npm run lint'
+            }
+        }
 
-        // stage('Test') {
-        //     when {
-        //         anyOf {
-        //             branch 'main'
-        //             branch 'deploy/production'
-        //         }
-        //     }
-        //     steps {
-        //         sh 'npm run test'
-        //     }
-        // }
+        stage('Test') {
+            when {
+                anyOf {
+                    branch 'main'
+                    branch 'deploy/production'
+                }
+            }
+            steps {
+                sh 'npm run test'
+            }
+        }
 
-        // stage('SonarQube Analysis') {
-        //     when {
-        //         anyOf {
-        //             branch 'main'
-        //             branch 'deploy/production'
-        //         }
-        //     }
-        //     steps {
-        //         script {
-        //             withSonarQubeEnv('sonar-scanner-installation') {
-        //                 sh """
-        //                     ${tool('sonar-scanner-tool')}/bin/sonar-scanner \\
-        //                         -Dsonar.projectKey=ci-todo-backend \\
-        //                         -Dsonar.sources=. \\
-        //                         -Dsonar.host.url=${SONAR_HOST_URL} \\
-        //                         -Dsonar.login=${SONAR_TOKEN}
-        //                 """
-        //             }
-        //         }
-        //     }
-        // }
+        stage('SonarQube Analysis') {
+            when {
+                anyOf {
+                    branch 'main'
+                    branch 'deploy/production'
+                }
+            }
+            steps {
+                script {
+                    withSonarQubeEnv('sonar-scanner-installation') {
+                        sh """
+                            ${tool('sonar-scanner-tool')}/bin/sonar-scanner \\
+                                -Dsonar.projectKey=ci-todo-backend \\
+                                -Dsonar.sources=. \\
+                                -Dsonar.host.url=${SONAR_HOST_URL} \\
+                                -Dsonar.login=${SONAR_TOKEN}
+                        """
+                    }
+                }
+            }
+        }
 
-        // stage('Snyk Security Scan') {
-        //     when {
-        //         anyOf {
-        //             branch 'main'
-        //             branch 'deploy/production'
-        //         }
-        //     }
-        //     steps {
-        //         snykSecurity(
-        //             snykInstallation: 'snyk-tool',
-        //             snykTokenId: 'snyk-token-id',
-        //             failOnIssues: false // ideally should be true, but for demo purposes we set it to false
-        //         )
-        //     }
-        // }
+        stage('Snyk Security Scan') {
+            when {
+                anyOf {
+                    branch 'main'
+                    branch 'deploy/production'
+                }
+            }
+            steps {
+                snykSecurity(
+                    snykInstallation: 'snyk-tool',
+                    snykTokenId: 'snyk-token-id',
+                    failOnIssues: false // ideally should be true, but for demo purposes we set it to false
+                )
+            }
+        }
 
-        // stage('Build Docker Image') {
-        //     when {
-        //         anyOf {
-        //             branch 'main'
-        //             branch 'deploy/production'
-        //         }
-        //     }
-        //     steps {
-        //         sh "docker build --platform linux/amd64 -t \${DOCKERHUB_USERNAME}/ci-todo-backend:\${GIT_COMMIT} ."
-        //     }
-        // }
+        stage('Build Docker Image') {
+            when {
+                anyOf {
+                    branch 'main'
+                    branch 'deploy/production'
+                }
+            }
+            steps {
+                sh "docker build --platform linux/amd64 -t \${DOCKERHUB_USERNAME}/ci-todo-backend:\${GIT_COMMIT} ."
+            }
+        }
 
-        // stage('Push Docker Image') {
-        //     when {
-        //         anyOf {
-        //             branch 'main'
-        //             branch 'deploy/production'
-        //         }
-        //     }
-        //     steps {
-        //         withDockerRegistry([credentialsId: 'dockerhub-credentials-id', url: 'https://index.docker.io/v1/']) {
-        //             sh "docker push \${DOCKERHUB_USERNAME}/ci-todo-backend:\${GIT_COMMIT}"
-        //         }
-        //     }
-        // }
+        stage('Push Docker Image') {
+            when {
+                anyOf {
+                    branch 'main'
+                    branch 'deploy/production'
+                }
+            }
+            steps {
+                withDockerRegistry([credentialsId: 'dockerhub-credentials-id', url: 'https://index.docker.io/v1/']) {
+                    sh "docker push \${DOCKERHUB_USERNAME}/ci-todo-backend:\${GIT_COMMIT}"
+                }
+            }
+        }
 
-        // stage('Deploy to AWS') {
-        //     when {
-        //         branch 'deploy/production'
-        //     }
-        //     steps {
-        //         sshPublisher(
-        //             publishers: [
-        //                 sshPublisherDesc(
-        //                     configName: 'ec2-todo-app-ssh-server',
-        //                     transfers: [
-        //                         sshTransfer(
-        //                             execCommand: """
-        //                                 cd app
-        //                                 sed -i '/^BACKEND_TAG=/d' .env
-        //                                 echo "BACKEND_TAG=\${GIT_COMMIT}" >> .env
-        //                                 docker compose pull backend
-        //                                 docker compose up -d backend
-        //                             """
-        //                         )
-        //                     ],
-        //                     usePromotionTimestamp: false,
-        //                     verbose: true
-        //                 )
-        //             ]
-        //         )
-        //     }
-        // }
+        stage('Deploy to AWS') {
+            when {
+                branch 'deploy/production'
+            }
+            steps {
+                sshPublisher(
+                    publishers: [
+                        sshPublisherDesc(
+                            configName: 'ec2-todo-app-ssh-server',
+                            transfers: [
+                                sshTransfer(
+                                    execCommand: """
+                                        cd app
+                                        sed -i '/^BACKEND_TAG=/d' .env
+                                        echo "BACKEND_TAG=\${GIT_COMMIT}" >> .env
+                                        docker compose pull backend
+                                        docker compose up -d backend
+                                    """
+                                )
+                            ],
+                            usePromotionTimestamp: false,
+                            verbose: true
+                        )
+                    ]
+                )
+            }
+        }
 
         // Uncomment the following stage to test the failure notification
         // stage('Test Failure') {
@@ -160,9 +161,9 @@ pipeline {
     post {
         failure {
             slackSend (
-                channel: '#backend',
+                channel: SLACK_BACKEND_CHANNEL_ID,
                 color: 'danger',
-                message: "Backend CI pipeline failed for commit \${env.GIT_COMMIT}"
+                message: "🚨 Backend CI pipeline failed for commit \${env.GIT_COMMIT}"
             )
         }
     }
