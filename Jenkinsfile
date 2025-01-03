@@ -6,6 +6,8 @@ pipeline {
         SONAR_HOST_URL = credentials('sonar-host-url')
         DOCKERHUB_USERNAME = credentials('dockerhub-username')
         SLACK_BACKEND_CHANNEL_ID = credentials('slack-backend-channel-id')
+
+        // Constants
         DOCKER_PLATFORM = "linux/amd64"
         MAIN_BRANCH = 'main'
         DEPLOY_PROD_BRANCH = 'deploy/production'
