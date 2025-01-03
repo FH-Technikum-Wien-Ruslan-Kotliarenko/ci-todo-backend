@@ -65,11 +65,11 @@ jobs:
         if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/deploy/production')
 
       - name: Build Docker Image
-        run: docker build --platform linux/amd64 -t your-dockerhub-username/ci-todo-backend:${{ github.sha }} .
+        run: docker build --platform linux/amd64 -t ${{ secrets.DOCKERHUB_USERNAME }}/ci-todo-backend:${{ github.sha }} .
         if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/deploy/production')
 
       - name: Push Docker Image
-        run: docker push your-dockerhub-username/ci-todo-backend:${{ github.sha }}
+        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/ci-todo-backend:${{ github.sha }}
         if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/deploy/production')
 
       - name: Deploy to AWS EC2

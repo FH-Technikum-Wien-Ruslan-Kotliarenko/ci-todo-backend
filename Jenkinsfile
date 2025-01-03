@@ -4,7 +4,7 @@ pipeline {
     environment {
         SONAR_TOKEN = credentials('sonar-token-id')
         SONAR_HOST_URL = credentials('sonar-host-url')
-        // If you push to Docker Hub, store these in Jenkins Credentials too
+        DOCKERHUB_USERNAME = credentials('dockerhub-username')
     }
 
     tools {
@@ -103,7 +103,7 @@ pipeline {
         //         }
         //     }
         //     steps {
-        //         sh "docker build --platform linux/amd64 -t your-dockerhub-username/ci-todo-backend:\${GIT_COMMIT} ."
+        //         sh "docker build --platform linux/amd64 -t \${DOCKERHUB_USERNAME}/ci-todo-backend:\${GIT_COMMIT} ."
         //     }
         // }
 
@@ -116,7 +116,7 @@ pipeline {
         //     }
         //     steps {
         //         withDockerRegistry([credentialsId: 'dockerhub-credentials-id', url: 'https://index.docker.io/v1/']) {
-        //             sh "docker push your-dockerhub-username/ci-todo-backend:\${GIT_COMMIT}"
+        //             sh "docker push \${DOCKERHUB_USERNAME}/ci-todo-backend:\${GIT_COMMIT}"
         //         }
         //     }
         // }
