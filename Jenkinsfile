@@ -25,7 +25,7 @@ pipeline {
         stage('Install Dependencies') {
             when {
                 expression {
-                    env.GIT_BRANCH == 'main' || env.GIT_BRANCH == 'deploy/production'
+                    env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'deploy/production'
                 }
             }
             steps {
