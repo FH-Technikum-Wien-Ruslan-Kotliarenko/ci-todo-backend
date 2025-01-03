@@ -22,6 +22,12 @@ pipeline {
             }
         }
 
+        stage('Print current branch') {
+            steps {
+                sh 'echo "Current branch is \${BRANCH_NAME}"'
+            }
+        }
+
         stage('Install Dependencies') {
             when {
                 anyOf {
