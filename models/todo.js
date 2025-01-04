@@ -1,4 +1,3 @@
-// models/todo.js
 const { DataTypes } = require('sequelize');
 
 module.exports = (sequelize) => {
@@ -17,11 +16,14 @@ module.exports = (sequelize) => {
       allowNull: false,
       type: DataTypes.BOOLEAN,
       defaultValue: false
+    },
+    userId: {
+      allowNull: false,
+      type: DataTypes.INTEGER,
+      references: {
+        model: 'users', // Reference by table name, not the object
+        key: 'id'
+      }
     }
   });
-
-  // At runtime, you can associate user -> todos in a small "init" step:
-  // If you have a "user" model loaded, you can do:
-  // Todo.belongsTo(sequelize.models.user, { foreignKey: 'userId' });
-  // That means each todo row references the user that created it.
 };

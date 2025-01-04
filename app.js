@@ -13,12 +13,20 @@ var todosRouter = require('./routes/todos');
 var authRouter  = require('./routes/auth');
 var db = require('./db/db');
 
+// Use `alter: true` for safe updates
+db.sync({ alter: true })
+  .then(() => {
+    console.log('Database synced successfully!');
+  })
+  .catch((err) => {
+    console.error('Database sync failed:', err);
+  });
+
 var app = express();
+
+app.set('trust proxy', 1);
+
 app.use(cors({
-  // allow all origins (for now)
-  origin: function(origin, callback) {
-    callback(null, true);
-  },
   credentials: true
 }));
 
@@ -28,13 +36,16 @@ app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 
 // Session config
+const store = new SequelizeStore({ db: db, tableName: 'Sessions' });
+
+// Make sure the table is created (or use migrations if you prefer).
+store.sync();
+
 app.use(session({
-  secret: 'SOME_LONG_RANDOM_STRING',  
+  secret: 'SOME_LONG_RANDOM_STRING',
   resave: false,
   saveUninitialized: false,
-  store: new SequelizeStore({
-    db: db
-  })
+  store: store
 }));
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -46,8 +57,9 @@ app.use('/api/auth', authRouter);   // <-- add the auth routes
 app.use(function(req, res, next) {
   next(createError(404));
 });
-app.use(function(err, req, res, next) {
-  next(createError(err.status || 500));
+app.use((err, req, res) => {
+  console.error('Server Error:', err);
+  res.status(err.status || 500).json({ error: err.message });
 });
 
 module.exports = app;
