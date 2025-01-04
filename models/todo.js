@@ -24,6 +24,10 @@ module.exports = (sequelize) => {
         model: 'users', // Reference by table name, not the object
         key: 'id'
       }
+    },
+    completedAt: {
+      type: DataTypes.DATE,
+      allowNull: true
     }
   });
 };

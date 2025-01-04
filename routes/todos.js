@@ -54,7 +54,7 @@ router.put('/:id/done', async (req, res) => {
   if (!todo) {
     return res.status(404).json({ error: 'Todo not found' });
   }
-  todo = await todo.update({ done: true });
+  todo = await todo.update({ done: true, completedAt: new Date() });
   res.status(200).json(todo);
 });
 
