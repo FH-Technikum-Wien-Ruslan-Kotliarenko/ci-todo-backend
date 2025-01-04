@@ -13,15 +13,6 @@ var todosRouter = require('./routes/todos');
 var authRouter  = require('./routes/auth');
 var db = require('./db/db');
 
-// Use `alter: true` for safe updates
-db.sync({ alter: true })
-  .then(() => {
-    console.log('Database synced successfully!');
-  })
-  .catch((err) => {
-    console.error('Database sync failed:', err);
-  });
-
 var app = express();
 
 app.set('trust proxy', 1);
