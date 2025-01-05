@@ -56,6 +56,7 @@ router.post('/login',
 
       // Put userId in session
       req.session.userId = user.id;
+      req.session.userEmail = user.email;
       return res.status(200).json({ message: 'Login successful' });
     } catch (err) {
       console.error(err);
@@ -81,12 +82,8 @@ router.get('/me', (req, res) => {
     return res.status(401).json({ error: 'Not authenticated' });
   }
 
-  // If we want to return user details, we could fetch from DB here:
-  // const user = await db.models.user.findByPk(req.session.userId);
-  // return res.json({ id: user.id, email: user.email, ... });
-
-  // For simplicity, just return userId:
-  return res.status(200).json({ userId: req.session.userId });
+  // user email is used for PostHog analytics
+  return res.status(200).json({ userId: req.session.userId, userEmail: req.session.userEmail });
 });
 
 
