@@ -11,15 +11,18 @@ describe('Todos Routes', () => {
     // await db.sync({ force: true });
     
     // Create a user first (and log in) so we can test protected routes
+    const email = `${Math.random().toString(36).substring(7)}@example.com`;
+    const password = 'testpass';
+
     await request(app).post('/api/auth/register').send({
-      email: 'test_todos@example.com',
-      password: 'testpass'
+      email,
+      password
     });
 
     // Login and store cookie
     const loginRes = await request(app)
       .post('/api/auth/login')
-      .send({ email: 'test_todos@example.com', password: 'testpass' });
+      .send({ email, password });
 
     authCookie = loginRes.headers['set-cookie']; 
   });

@@ -3,6 +3,10 @@ const request = require('supertest');
 const app = require('../../app');
 const db = require('../../db/db');
 
+const MOCK_EMAIL_1 = `${Math.random().toString(36).substring(7)}@example.com`;
+const MOCK_PASSWORD_1 = 'testpass';
+const MOCK_PASSWORD_2 = 'anotherSecret';
+
 // Optional: set up test DB or mock
 // e.g., you might have a special DB for tests, or you can mock calls.
 
@@ -23,8 +27,8 @@ describe('Auth Routes', () => {
     const res = await request(app)
       .post('/api/auth/register')
       .send({
-        email: 'john@example.com',
-        password: 'secret123'
+        email: MOCK_EMAIL_1,
+        password: MOCK_PASSWORD_1
       });
 
     expect(res.statusCode).toBe(201);
@@ -37,8 +41,8 @@ describe('Auth Routes', () => {
     const res = await request(app)
       .post('/api/auth/register')
       .send({
-        email: 'john@example.com',
-        password: 'anotherSecret'
+        email: MOCK_EMAIL_1,
+        password: MOCK_PASSWORD_2
       });
 
     expect(res.statusCode).toBe(400);
@@ -50,8 +54,8 @@ describe('Auth Routes', () => {
     const res = await request(app)
       .post('/api/auth/login')
       .send({
-        email: 'john@example.com',
-        password: 'secret123'
+        email: MOCK_EMAIL_1,
+        password: MOCK_PASSWORD_1
       });
     
     expect(res.statusCode).toBe(200);
@@ -63,8 +67,8 @@ describe('Auth Routes', () => {
     const res = await request(app)
       .post('/api/auth/login')
       .send({
-        email: 'john@example.com',
-        password: 'wrongPassword'
+        email: MOCK_EMAIL_1,
+        password: MOCK_PASSWORD_2
       });
     
     expect(res.statusCode).toBe(401);
