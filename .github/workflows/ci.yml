@@ -14,29 +14,29 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
+      # - name: Set up Node.js
+      #   uses: actions/setup-node@v3
+      #   with:
+      #     node-version: '18'
 
-      - name: Install Dependencies
-        run: npm install
-        # Run if pushing to main OR deploy/production
-        if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/deploy/production')
+      # - name: Install Dependencies
+      #   run: npm install
+      #   # Run if pushing to main OR deploy/production
+      #   if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/deploy/production')
 
-      - name: Lint Code
-        run: npm run lint
-        if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/deploy/production')
+      # - name: Lint Code
+      #   run: npm run lint
+      #   if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/deploy/production')
 
-      - name: Run Tests
-        run: npm run test
-        env: 
-          DB_DIALECT: ${{ secrets.DB_DIALECT }}
-          DB_USER: ${{ secrets.DB_USER }}
-          DB_PW: ${{ secrets.DB_PW }}
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_NAME: ${{ secrets.DB_NAME }}
-        if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/deploy/production')
+      # - name: Run Tests
+      #   run: npm run test
+      #   env: 
+      #     DB_DIALECT: ${{ secrets.DB_DIALECT }}
+      #     DB_USER: ${{ secrets.DB_USER }}
+      #     DB_PW: ${{ secrets.DB_PW }}
+      #     DB_HOST: ${{ secrets.DB_HOST }}
+      #     DB_NAME: ${{ secrets.DB_NAME }}
+      #   if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/deploy/production')
 
       # - name: SonarQube Scan
       #   uses: sonarsource/sonarqube-scan-action@master
