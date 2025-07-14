@@ -107,8 +107,8 @@ jobs:
         if: startsWith(github.ref, 'refs/heads/deploy/production')
 
       # Uncomment this step to test failure notification
-      # - name: Test Failure
-      #   run: exit 1 # Force a failure for testing purposes
+      - name: Test Failure
+        run: exit 1 # Force a failure for testing purposes
 
   notify:
     if: failure()
