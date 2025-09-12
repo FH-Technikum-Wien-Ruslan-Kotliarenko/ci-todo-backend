@@ -75,20 +75,35 @@ jobs:
     if: startsWith(github.ref, 'refs/heads/deploy/production')
     needs: build-and-push
     runs-on: ubuntu-latest
-      
     steps:
       - name: Checkout (same commit as this job)
         uses: actions/checkout@v4
 
+      # 0) Clean remote k6 dir to avoid nested k6/k6
+      - name: Prepare remote k6 dir
+        uses: appleboy/ssh-action@v0.1.6
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_PRIVATE_KEY }}
+          script: |
+            mkdir -p ~/app
+            rm -rf ~/app/k6
+            mkdir -p ~/app/k6
+
+      # 1) Copy the local k6 folder contents, removing the top-level "k6/" path
       - name: Upload k6 scripts
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_PRIVATE_KEY }}
-          source: "k6/*"            # copy contents, not the k6 folder itself
+          source: "k6/**"
           target: "~/app/k6"
+          strip_components: 1   # <— prevents ~/app/k6/k6/*
+          overwrite: true
 
+      # 2) Deploy + run k6 (unchanged except we add a ls check)
       - name: SSH deploy to EC2 (green)
         uses: appleboy/ssh-action@v0.1.6
         with:
@@ -99,7 +114,6 @@ jobs:
             set -Eeuo pipefail
             cd ~/app
 
-            # Ensure k6 files are present where we expect them
             echo "Listing ~/app/k6:"
             ls -la k6
             test -f k6/smoke.js || { echo "k6/smoke.js missing"; exit 1; }
@@ -112,11 +126,11 @@ jobs:
             docker compose pull backend_green
             docker compose up -d backend_green
 
-            # 3) Discover GREEN's published host port for 8080/tcp (e.g., 8083)
+            # 3) Discover GREEN port
             GREEN_PORT="$(docker inspect -f '{{ (index (index .NetworkSettings.Ports "8080/tcp") 0).HostPort }}' backend_green)"
             echo "GREEN_PORT=$GREEN_PORT"
 
-            # 4) Wait until GREEN responds at /health (fast fail if not)
+            # 4) Wait until GREEN responds at /health
             for i in {1..30}; do
               if curl -fsS --max-time 2 "http://127.0.0.1:${GREEN_PORT}/health" >/dev/null; then
                 echo "Green is up on :${GREEN_PORT}"
@@ -127,28 +141,30 @@ jobs:
               if [ $i -eq 30 ]; then echo "Green failed to start"; exit 1; fi
             done
 
-            # 5) Run k6 smoke (must pass to continue)
+            # 5) Run k6 smoke (must pass)
             docker run --rm --network host \
               -e BASE_URL="http://127.0.0.1:${GREEN_PORT}" \
-              -v "$PWD/k6":/scripts grafana/k6 run /scripts/smoke.js
+              -v "$(pwd)/k6:/scripts:ro" \
+              grafana/k6 run /scripts/smoke.js
 
-            # 6) Optional: run CRUD test if API key is provided in .env (kept on EC2)
-            set +u
-            source .env || true
-            set -u
+            # 6) Optional CRUD k6 if API key present
+            set +u; source .env || true; set -u
             if [ -n "${API_KEY_FOR_CI:-}" ]; then
               echo "Running CRUD k6 with API key"
               docker run --rm --network host \
                 -e BASE_URL="http://127.0.0.1:${GREEN_PORT}" \
                 -e API_KEY="${API_KEY_FOR_CI}" \
-                -v "$PWD/k6":/scripts grafana/k6 run /scripts/crud.js
+                -v "$(pwd)/k6:/scripts:ro" \
+                grafana/k6 run /scripts/crud.js
             else
               echo "API_KEY_FOR_CI not set; skipping CRUD k6"
             fi
 
-            # 7) Flip Nginx to GREEN and restart (only if all k6 exited 0)
+            # 7) Flip to GREEN + verify
             sed -i 's/set \$active_backend backend_blue;/set \$active_backend backend_green;/' nginx.conf
             docker compose restart nginx
+            curl -fsS --retry 10 --retry-connrefused --retry-delay 2 "http://127.0.0.1/health" >/dev/null
+            echo "Nginx is serving GREEN ✅"
 
   notify:
     if: failure()
