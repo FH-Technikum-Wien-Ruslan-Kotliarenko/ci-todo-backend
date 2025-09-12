@@ -75,7 +75,17 @@ jobs:
     if: startsWith(github.ref, 'refs/heads/deploy/production')
     needs: build-and-push
     runs-on: ubuntu-latest
+      
     steps:
+      - name: Upload k6 scripts
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_PRIVATE_KEY }}
+          source: "k6/*"
+          target: "~/app/k6"
+
       - name: SSH deploy to EC2 (green)
         uses: appleboy/ssh-action@v0.1.6
         with:
@@ -98,18 +108,38 @@ jobs:
             GREEN_PORT="$(docker inspect -f '{{ (index (index .NetworkSettings.Ports "8080/tcp") 0).HostPort }}' backend_green)"
             echo "GREEN_PORT=$GREEN_PORT"
 
-            # 4) Health-check GREEN locally
+            # 4) Wait until GREEN responds at /health (fast fail if not)
             for i in {1..30}; do
               if curl -fsS --max-time 2 "http://127.0.0.1:${GREEN_PORT}/health" >/dev/null; then
-                echo "Green healthy on :${GREEN_PORT}"
+                echo "Green is up on :${GREEN_PORT}"
                 break
               fi
               echo "Waiting for green... ($i)"
               sleep 2
-              if [ $i -eq 30 ]; then echo "Green failed health"; exit 1; fi
+              if [ $i -eq 30 ]; then echo "Green failed to start"; exit 1; fi
             done
 
-            # 5) Flip Nginx to GREEN and restart
+            # 5) Run k6 smoke (must pass to continue)
+            docker run --rm --network host \
+              -e BASE_URL="http://127.0.0.1:${GREEN_PORT}" \
+              -v "$PWD/k6":/scripts grafana/k6 run /scripts/smoke.js
+
+            # 6) Optional: run CRUD test if API key is provided in .env (kept on EC2)
+            #    Add: API_KEY_FOR_CI=<valid key> to ~/app/.env once.
+            set +u
+            source .env || true
+            set -u
+            if [ -n "${API_KEY_FOR_CI:-}" ]; then
+              echo "Running CRUD k6 with API key"
+              docker run --rm --network host \
+                -e BASE_URL="http://127.0.0.1:${GREEN_PORT}" \
+                -e API_KEY="${API_KEY_FOR_CI}" \
+                -v "$PWD/k6":/scripts grafana/k6 run /scripts/crud.js
+            else
+              echo "API_KEY_FOR_CI not set; skipping CRUD k6"
+            fi
+
+            # 7) Flip Nginx to GREEN and restart (only if all k6 exited 0)
             sed -i 's/set \$active_backend backend_blue;/set \$active_backend backend_green;/' nginx.conf
             docker compose restart nginx
 
