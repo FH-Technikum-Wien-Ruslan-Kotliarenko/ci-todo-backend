@@ -71,30 +71,40 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_PRIVATE_KEY }}
           script: |
-            set -e
+            set -Eeuo pipefail
             cd ~/app
 
-            # Update image tag for green
+            # 1) Update image tag for GREEN
             sed -i '/^BACKEND_GREEN_TAG=/d' .env
             echo "BACKEND_GREEN_TAG=${{ github.sha }}" >> .env
 
-            # Pull and start green
+            # 2) Pull & start GREEN
             docker compose pull backend_green
             docker compose up -d backend_green
 
-            # Health-check green before flip
+            # 3) Discover GREEN's published host port for 8080/tcp (e.g., 8083)
+            GREEN_PORT="$(docker inspect -f '{{ (index (index .NetworkSettings.Ports "8080/tcp") 0).HostPort }}' backend_green)"
+            echo "GREEN_PORT=$GREEN_PORT"
+
+            # 4) Health-check GREEN locally
             for i in {1..30}; do
-              if curl -fsS http://${{ secrets.EC2_HOST }}:8080/health >/dev/null; then
-                echo "Green healthy"; break
+              if curl -fsS --max-time 2 "http://127.0.0.1:${GREEN_PORT}/health" >/dev/null; then
+                echo "Green healthy on :${GREEN_PORT}"
+                break
               fi
               echo "Waiting for green... ($i)"
               sleep 2
               if [ $i -eq 30 ]; then echo "Green failed health"; exit 1; fi
             done
 
-            # Flip Nginx to green
+            # 5) Flip Nginx to GREEN and restart
             sed -i 's/set \$active_backend backend_blue;/set \$active_backend backend_green;/' nginx.conf
             docker compose restart nginx
+
+            # 6) Verify through Nginx (public entry)
+            curl -fsS --retry 10 --retry-connrefused --retry-delay 2 "http://127.0.0.1/health" >/dev/null
+            echo "Nginx is serving GREEN ✅"
+
   notify:
     if: failure()
     needs: [build-and-push, deploy-green]
