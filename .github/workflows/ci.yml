@@ -48,7 +48,7 @@ jobs:
 
       - name: Build image (amd64)
         run: |
-          IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/lost-found-backend
+          IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/ci-todo-backend
           TAG=${{ github.sha }}
           docker build --platform linux/amd64 -t $IMAGE:$TAG -t $IMAGE:latest .
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
