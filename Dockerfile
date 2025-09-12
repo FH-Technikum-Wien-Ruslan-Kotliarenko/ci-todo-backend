@@ -10,7 +10,7 @@ RUN npm ci --omit=dev
 
 # app sources
 COPY ./src ./src
-COPY .env ./.env
+COPY .env.example ./.env.example
 
 EXPOSE 8080
 CMD ["node", "src/server.js"]
