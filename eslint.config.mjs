@@ -11,6 +11,7 @@ export default [
     rules: {
       ...js.configs.recommended.rules,
       'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      'no-undef': 'warn',
       'no-console': 'off',
       'prefer-const': 'warn',
       semi: ['error', 'always'],
