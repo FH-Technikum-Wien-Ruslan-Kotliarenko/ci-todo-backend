@@ -1,5 +1,5 @@
 import http from 'k6/http';
-const { sleep, check } = require('k6');
+import { sleep, check } from 'k6';
 
 export const options = {
   thresholds: {
