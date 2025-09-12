@@ -84,7 +84,7 @@ jobs:
 
             # Health-check green before flip
             for i in {1..30}; do
-              if curl -fsS http://localhost:8081/health >/dev/null; then
+              if curl -fsS http://${{ secrets.EC2_HOST }}:8080/health >/dev/null; then
                 echo "Green healthy"; break
               fi
               echo "Waiting for green... ($i)"
