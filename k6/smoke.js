@@ -1,10 +1,10 @@
 import http from 'k6/http';
-import { sleep, check } from 'k6';
+const { sleep, check } = require('k6');
 
 export const options = {
   thresholds: {
     http_req_duration: ['p(95)<500'], // 95% < 500ms
-    checks: ['rate>0.99']             // at least 99% checks must pass
+    checks: ['rate>0.99'] // at least 99% checks must pass
   },
   scenarios: {
     smoke: { executor: 'constant-vus', vus: 3, duration: '30s' }
