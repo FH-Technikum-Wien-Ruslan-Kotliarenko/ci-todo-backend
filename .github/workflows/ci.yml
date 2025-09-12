@@ -19,6 +19,18 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
+      - name: Lint Code
+        run: npm run lint
+
+      - name: Run Tests
+        run: npm run test
+        env: 
+          DB_DIALECT: ${{ secrets.DB_DIALECT }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PW: ${{ secrets.DB_PW }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+
       - name: SonarQube Scan
         uses: sonarsource/sonarqube-scan-action@master
         env:

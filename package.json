@@ -5,7 +5,9 @@
   "type": "commonjs",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "NODE_ENV=development node src/server.js"
+    "dev": "NODE_ENV=development node src/server.js",
+    "lint": "eslint . --ext .js",
+    "test": "cross-env NODE_ENV=test jest --runInBand"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
@@ -15,5 +17,11 @@
     "mariadb": "^3.3.0",
     "posthog-node": "^5.8.4",
     "sequelize": "^6.37.3"
+  },
+  "devDependencies": {
+    "cross-env": "^10.0.0",
+    "eslint": "^9.35.0",
+    "jest": "^30.1.3",
+    "supertest": "^7.1.4"
   }
 }

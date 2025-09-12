@@ -11,10 +11,8 @@ const connUrl =
   '/' +
   process.env.DB_NAME;
 
-console.log('--- DB URL:', connUrl);
-
 const sequelize = new Sequelize(connUrl, {
-  logging: console.log,
+  logging: false,
   dialectOptions: {
     // add RDS SSL options here if required by your instance
   }
