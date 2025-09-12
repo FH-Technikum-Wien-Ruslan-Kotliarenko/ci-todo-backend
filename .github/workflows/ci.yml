@@ -86,7 +86,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_PRIVATE_KEY }}
-          source: "k6/**"
+          source: "k6/*"            # copy contents, not the k6 folder itself
           target: "~/app/k6"
 
       - name: SSH deploy to EC2 (green)
@@ -98,6 +98,11 @@ jobs:
           script: |
             set -Eeuo pipefail
             cd ~/app
+
+            # Ensure k6 files are present where we expect them
+            echo "Listing ~/app/k6:"
+            ls -la k6
+            test -f k6/smoke.js || { echo "k6/smoke.js missing"; exit 1; }
 
             # 1) Update image tag for GREEN
             sed -i '/^BACKEND_GREEN_TAG=/d' .env
@@ -128,7 +133,6 @@ jobs:
               -v "$PWD/k6":/scripts grafana/k6 run /scripts/smoke.js
 
             # 6) Optional: run CRUD test if API key is provided in .env (kept on EC2)
-            #    Add: API_KEY_FOR_CI=<valid key> to ~/app/.env once.
             set +u
             source .env || true
             set -u
