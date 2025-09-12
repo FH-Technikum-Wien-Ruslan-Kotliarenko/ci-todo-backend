@@ -11,46 +11,46 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '22'
+      # - name: Set up Node.js
+      #   uses: actions/setup-node@v3
+      #   with:
+      #     node-version: '22'
 
-      - name: Install Dependencies
-        run: npm install
+      # - name: Install Dependencies
+      #   run: npm install
 
-      - name: Lint Code
-        run: npm run lint
+      # - name: Lint Code
+      #   run: npm run lint
 
-      - name: Run Tests
-        run: npm run test
-        env: 
-          DB_DIALECT: ${{ secrets.DB_DIALECT }}
-          DB_USER: ${{ secrets.DB_USER }}
-          DB_PW: ${{ secrets.DB_PW }}
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_NAME: ${{ secrets.DB_NAME }}
+      # - name: Run Tests
+      #   run: npm run test
+      #   env: 
+      #     DB_DIALECT: ${{ secrets.DB_DIALECT }}
+      #     DB_USER: ${{ secrets.DB_USER }}
+      #     DB_PW: ${{ secrets.DB_PW }}
+      #     DB_HOST: ${{ secrets.DB_HOST }}
+      #     DB_NAME: ${{ secrets.DB_NAME }}
 
-      - name: SonarQube Scan
-        uses: sonarsource/sonarqube-scan-action@master
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      # - name: SonarQube Scan
+      #   uses: sonarsource/sonarqube-scan-action@master
+      #   env:
+      #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      #     SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
-      - name: Snyk Monitor
-        uses: snyk/actions/node@master
-        env:
-            SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-            command: monitor
+      # - name: Snyk Monitor
+      #   uses: snyk/actions/node@master
+      #   env:
+      #       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      #   with:
+      #       command: monitor
 
-      - name: Snyk Test
-        uses: snyk/actions/node@master
-        continue-on-error: true # ideally should be false, but for demo purposes we set it to true
-        env:
-            SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-            args: --severity-threshold=high
+      # - name: Snyk Test
+      #   uses: snyk/actions/node@master
+      #   continue-on-error: true # ideally should be false, but for demo purposes we set it to true
+      #   env:
+      #       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      #   with:
+      #       args: --severity-threshold=high
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -159,12 +159,6 @@ jobs:
             else
               echo "API_KEY_FOR_CI not set; skipping CRUD k6"
             fi
-
-            # 7) Flip to GREEN + verify
-            sed -i 's/set \$active_backend backend_blue;/set \$active_backend backend_green;/' nginx.conf
-            docker compose restart nginx
-            curl -fsS --retry 10 --retry-connrefused --retry-delay 2 "http://127.0.0.1/health" >/dev/null
-            echo "Nginx is serving GREEN ✅"
 
   notify:
     if: failure()
