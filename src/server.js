@@ -7,6 +7,7 @@ fastify.decorate('db', sequelize);
 
 // plugins
 fastify.register(require('./plugins/apiKeyAuth'));
+fastify.register(require('./plugins/posthog'));
 
 // routes
 fastify.register(require('./routes/health'));

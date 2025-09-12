@@ -2,7 +2,6 @@ const { Op } = require('sequelize');
 
 module.exports = async function (fastify) {
   const { Item } = fastify.db.models;
-  const SEARCH_ENABLED = (process.env.SEARCH_ENABLED || 'true').toLowerCase() === 'true';
   const DEFAULT_PAGE_SIZE = Number(process.env.DEFAULT_PAGE_SIZE || 20);
   const MAX_PAGE_SIZE = Number(process.env.MAX_PAGE_SIZE || 100);
 
@@ -30,8 +29,11 @@ module.exports = async function (fastify) {
     async (req, reply) => {
       const { q, sort = 'newest', page = 1, pageSize = DEFAULT_PAGE_SIZE } = req.query;
 
+      const enabled = await fastify.isSearchEnabled();
+      console.log('--- Search enabled:', enabled);
+
       const where = {};
-      if (SEARCH_ENABLED && q && q.trim()) {
+      if (enabled && q && q.trim()) {
         const term = `%${q.trim()}%`;
         where[Op.or] = [{ name: { [Op.like]: term } }, { description: { [Op.like]: term } }];
       }

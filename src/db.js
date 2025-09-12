@@ -1,10 +1,17 @@
 const { Sequelize } = require('sequelize');
 
-const { DB_DIALECT = 'mariadb', DB_USER, DB_PW, DB_HOST, DB_NAME } = process.env;
+const connUrl =
+  process.env.DB_DIALECT +
+  '://' +
+  process.env.DB_USER +
+  ':' +
+  process.env.DB_PW +
+  '@' +
+  process.env.DB_HOST +
+  '/' +
+  process.env.DB_NAME;
 
-const connUrl = `${DB_DIALECT}://${DB_USER}:${DB_PW}@${DB_HOST}/${DB_NAME}`;
-
-console.log('DB URL:', connUrl);
+console.log('--- DB URL:', connUrl);
 
 const sequelize = new Sequelize(connUrl, {
   logging: console.log,
