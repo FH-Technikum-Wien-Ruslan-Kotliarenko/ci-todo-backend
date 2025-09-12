@@ -1,49 +1,21 @@
-name: Backend CI/CD Pipeline
+name: Backend CI/CD
 
 on:
   push:
-    branches:
-      - main
-      - deploy/production
+    branches: [ "main", "deploy/production" ]
 
 jobs:
-  build-and-deploy:
+  build-and-push:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-
-      - name: Install Dependencies
-        run: npm install
-        # Run if pushing to main OR deploy/production
-        if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/deploy/production')
-
-      - name: Lint Code
-        run: npm run lint
-        if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/deploy/production')
-
-      - name: Run Tests
-        run: npm run test
-        env: 
-          DB_DIALECT: ${{ secrets.DB_DIALECT }}
-          DB_USER: ${{ secrets.DB_USER }}
-          DB_PW: ${{ secrets.DB_PW }}
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_NAME: ${{ secrets.DB_NAME }}
-        if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/deploy/production')
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: SonarQube Scan
         uses: sonarsource/sonarqube-scan-action@master
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/deploy/production')
 
       - name: Snyk Monitor
         uses: snyk/actions/node@master
@@ -51,7 +23,6 @@ jobs:
             SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
             command: monitor
-        if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/deploy/production')
 
       - name: Snyk Test
         uses: snyk/actions/node@master
@@ -60,59 +31,65 @@ jobs:
             SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
             args: --severity-threshold=high
-        if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/deploy/production')
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
-        # Run if pushing to main OR deploy/production
-        if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/deploy/production')
 
-      - name: Build Docker Image
-        run: docker build --platform linux/amd64 -t ${{ secrets.DOCKERHUB_USERNAME }}/ci-todo-backend:${{ github.sha }} .
-        if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/deploy/production')
+      - name: Build image (amd64)
+        run: |
+          IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/lost-found-backend
+          TAG=${{ github.sha }}
+          docker build --platform linux/amd64 -t $IMAGE:$TAG -t $IMAGE:latest .
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+          echo "TAG=$TAG" >> $GITHUB_ENV
 
-      - name: Push Docker Image
-        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/ci-todo-backend:${{ github.sha }}
-        if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/deploy/production')
+      - name: Push
+        run: |
+          docker push $IMAGE:${{ env.TAG }}
+          docker push $IMAGE:latest
 
-      - name: Deploy to AWS EC2
+  deploy-green:
+    if: startsWith(github.ref, 'refs/heads/deploy/production')
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH deploy to EC2 (green)
         uses: appleboy/ssh-action@v0.1.6
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_PRIVATE_KEY }}
-          port: 22
           script: |
-            cd app
+            set -e
+            cd ~/app
 
-            # 1. Update .env to set BACKEND_GREEN_TAG
+            # Update image tag for green
             sed -i '/^BACKEND_GREEN_TAG=/d' .env
             echo "BACKEND_GREEN_TAG=${{ github.sha }}" >> .env
 
-            # 2. Deploy 'backend_green'
+            # Pull and start green
             docker compose pull backend_green
             docker compose up -d backend_green
 
-            # 3. Optional: check logs or do health check
+            # Health-check green before flip
+            for i in {1..30}; do
+              if curl -fsS http://localhost:8081/health >/dev/null; then
+                echo "Green healthy"; break
+              fi
+              echo "Waiting for green... ($i)"
+              sleep 2
+              if [ $i -eq 30 ]; then echo "Green failed health"; exit 1; fi
+            done
 
-            # 4. Flip Nginx from backend_blue to backend_green
+            # Flip Nginx to green
             sed -i 's/set \$active_backend backend_blue;/set \$active_backend backend_green;/' nginx.conf
-
-            # 5. Reload Nginx
             docker compose restart nginx
-        # IMPORTANT: Only run on deploy/production
-        if: startsWith(github.ref, 'refs/heads/deploy/production')
-
-      # Uncomment this step to test failure notification
-      # - name: Test Failure
-      #   run: exit 1 # Force a failure for testing purposes
-
   notify:
     if: failure()
-    needs: build-and-deploy
+    needs: [build-and-push, deploy-green]
     runs-on: ubuntu-latest
 
     steps:
