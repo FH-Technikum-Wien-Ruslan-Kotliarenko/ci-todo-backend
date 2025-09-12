@@ -1,0 +1,9 @@
+.git
+node_modules
+npm-debug.log*
+coverage
+tests
+Dockerfile
+.github
+README.md
+*.md
