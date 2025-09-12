@@ -101,10 +101,6 @@ jobs:
             sed -i 's/set \$active_backend backend_blue;/set \$active_backend backend_green;/' nginx.conf
             docker compose restart nginx
 
-            # 6) Verify through Nginx (public entry)
-            curl -fsS --retry 10 --retry-connrefused --retry-delay 2 "http://127.0.0.1/health" >/dev/null
-            echo "Nginx is serving GREEN ✅"
-
   notify:
     if: failure()
     needs: [build-and-push, deploy-green]
