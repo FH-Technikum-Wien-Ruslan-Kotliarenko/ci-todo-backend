@@ -4,53 +4,94 @@ on:
   push:
     branches: [ "main", "deploy/production" ]
 
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  build-and-push:
+  # -----------------------------
+  # 1) Build (both branches)
+  # -----------------------------
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '22'
 
       - name: Install Dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Lint Code
+      - name: Lint
         run: npm run lint
 
-      - name: Run Tests
+      - name: Test
         run: npm run test
-        env: 
+        env:
           DB_DIALECT: ${{ secrets.DB_DIALECT }}
-          DB_USER: ${{ secrets.DB_USER }}
-          DB_PW: ${{ secrets.DB_PW }}
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USER:    ${{ secrets.DB_USER }}
+          DB_PW:      ${{ secrets.DB_PW }}
+          DB_HOST:    ${{ secrets.DB_HOST }}
+          DB_NAME:    ${{ secrets.DB_NAME }}
+
+      # Build image on both branches (so "Build" stage exists on main)
+      - name: Build Docker image (amd64)
+        run: |
+          IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/ci-todo-backend
+          TAG=${{ github.sha }}
+          docker build --platform linux/amd64 -t $IMAGE:$TAG -t $IMAGE:latest .
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+          echo "TAG=$TAG"     >> $GITHUB_ENV
+
+  # ---------------------------------------------
+  # 2) Deliver (only deploy/production): quality + push
+  # ---------------------------------------------
+  deliver:
+    if: startsWith(github.ref, 'refs/heads/deploy/production')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # (Re)build to ensure IMAGE/TAG env exist in this job
+      - name: Build Docker image (amd64)
+        run: |
+          IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/ci-todo-backend
+          TAG=${{ github.sha }}
+          docker build --platform linux/amd64 -t $IMAGE:$TAG -t $IMAGE:latest .
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+          echo "TAG=$TAG"     >> $GITHUB_ENV
 
       - name: SonarQube Scan
         uses: sonarsource/sonarqube-scan-action@master
         env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_TOKEN:   ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
       - name: Snyk Monitor
         uses: snyk/actions/node@master
         env:
-            SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
-            command: monitor
+          command: monitor
 
-      - name: Snyk Test
+      - name: Snyk Test (non-blocking)
         uses: snyk/actions/node@master
-        continue-on-error: true # ideally should be false, but for demo purposes we set it to true
+        continue-on-error: true
         env:
-            SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
-            args: --severity-threshold=high
+          args: --severity-threshold=high
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -58,58 +99,52 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
-      - name: Build image (amd64)
-        run: |
-          IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/ci-todo-backend
-          TAG=${{ github.sha }}
-          docker build --platform linux/amd64 -t $IMAGE:$TAG -t $IMAGE:latest .
-          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
-          echo "TAG=$TAG" >> $GITHUB_ENV
-
-      - name: Push
+      - name: Push images
         run: |
           docker push $IMAGE:${{ env.TAG }}
           docker push $IMAGE:latest
 
+  # --------------------------------------------------------
+  # 3) Deploy to GREEN + run k6 + flip (only deploy/production)
+  # --------------------------------------------------------
   deploy-green:
     if: startsWith(github.ref, 'refs/heads/deploy/production')
-    needs: build-and-push
+    needs: deliver
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout (same commit as this job)
+      - name: Checkout (same commit)
         uses: actions/checkout@v4
 
-      # 0) Clean remote k6 dir to avoid nested k6/k6
+      # Clean remote k6 dir (avoid nested k6/k6)
       - name: Prepare remote k6 dir
         uses: appleboy/ssh-action@v0.1.6
         with:
-          host: ${{ secrets.EC2_HOST }}
+          host:     ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_PRIVATE_KEY }}
+          key:      ${{ secrets.EC2_PRIVATE_KEY }}
           script: |
             mkdir -p ~/app
             rm -rf ~/app/k6
             mkdir -p ~/app/k6
 
-      # 1) Copy the local k6 folder contents, removing the top-level "k6/" path
+      # Copy k6 scripts, stripping the leading "k6/"
       - name: Upload k6 scripts
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.EC2_HOST }}
+          host:     ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_PRIVATE_KEY }}
-          source: "k6/**"
-          target: "~/app/k6"
-          strip_components: 1   # <— prevents ~/app/k6/k6/*
+          key:      ${{ secrets.EC2_PRIVATE_KEY }}
+          source:   "k6/**"
+          target:   "~/app/k6"
+          strip_components: 1
           overwrite: true
 
-      # 2) Deploy + run k6 (unchanged except we add a ls check)
-      - name: SSH deploy to EC2 (green)
+      - name: Deploy GREEN, run k6, flip if OK
         uses: appleboy/ssh-action@v0.1.6
         with:
-          host: ${{ secrets.EC2_HOST }}
+          host:     ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_PRIVATE_KEY }}
+          key:      ${{ secrets.EC2_PRIVATE_KEY }}
           script: |
             set -Eeuo pipefail
             cd ~/app
@@ -118,19 +153,19 @@ jobs:
             ls -la k6
             test -f k6/smoke.js || { echo "k6/smoke.js missing"; exit 1; }
 
-            # 1) Update image tag for GREEN
+            # 1) Update GREEN tag
             sed -i '/^BACKEND_GREEN_TAG=/d' .env
             echo "BACKEND_GREEN_TAG=${{ github.sha }}" >> .env
 
-            # 2) Pull & start GREEN
+            # 2) Start GREEN
             docker compose pull backend_green
             docker compose up -d backend_green
 
-            # 3) Discover GREEN port
+            # 3) Discover GREEN's host port for 8080/tcp (e.g. 8083)
             GREEN_PORT="$(docker inspect -f '{{ (index (index .NetworkSettings.Ports "8080/tcp") 0).HostPort }}' backend_green)"
             echo "GREEN_PORT=$GREEN_PORT"
 
-            # 4) Wait until GREEN responds at /health
+            # 4) Wait for GREEN /health
             for i in {1..30}; do
               if curl -fsS --max-time 2 "http://127.0.0.1:${GREEN_PORT}/health" >/dev/null; then
                 echo "Green is up on :${GREEN_PORT}"
@@ -141,13 +176,13 @@ jobs:
               if [ $i -eq 30 ]; then echo "Green failed to start"; exit 1; fi
             done
 
-            # 5) Run k6 smoke (must pass)
+            # 5) Run k6 smoke (gate)
             docker run --rm --network host \
               -e BASE_URL="http://127.0.0.1:${GREEN_PORT}" \
               -v "$(pwd)/k6:/scripts:ro" \
               grafana/k6 run /scripts/smoke.js
 
-            # 6) Optional CRUD k6 if API key present
+            # 6) Optional CRUD if API key present in .env
             set +u; source .env || true; set -u
             if [ -n "${API_KEY_FOR_CI:-}" ]; then
               echo "Running CRUD k6 with API key"
@@ -160,17 +195,23 @@ jobs:
               echo "API_KEY_FOR_CI not set; skipping CRUD k6"
             fi
 
+            # 7) Flip Nginx to GREEN (only reached if k6 exited 0)
+            sed -i 's/set \$active_backend backend_blue;/set \$active_backend backend_green;/' nginx.conf
+            docker compose restart nginx
+
+  # -----------------------------
+  # 4) Notify on failure
+  # -----------------------------
   notify:
     if: failure()
-    needs: [build-and-push, deploy-green]
+    needs: [build, deliver, deploy-green]
     runs-on: ubuntu-latest
-
     steps:
-      - name: Post text to a Slack channel
+      - name: Post text to Slack
         uses: slackapi/slack-github-action@v2.0.0
         with:
           method: chat.postMessage
           token: ${{ secrets.SLACK_BOT_TOKEN }}
           payload: |
             "channel": "${{ secrets.SLACK_BACKEND_CHANNEL_ID }}",
-            "text": "🚨 Backend CI pipeline failed for commit ${{ github.sha }}"
+            "text": "🚨 Backend pipeline FAILED for commit ${{ github.sha }} on ${{ github.ref_name }}"
