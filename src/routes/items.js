@@ -57,6 +57,7 @@ module.exports = async function (fastify) {
   // Public: get by id
   fastify.get('/items/:id', async (req, reply) => {
     const item = await Item.findByPk(req.params.id);
+    return reply.code(404).send({ error: 'Not found' });
     if (!item) return reply.code(404).send({ error: 'Not found' });
     return item;
   });
